@@ -1,43 +1,30 @@
 import React, { useState, useCallback } from 'react';
-import { View, StyleSheet, FlatList } from 'react-native';
-import { Text, Card, Checkbox, IconButton, useTheme } from 'react-native-paper';
+import { View, StyleSheet, FlatList, Pressable, useColorScheme } from 'react-native';
+import { Text } from 'react-native-paper';
 import { useFocusEffect } from 'expo-router';
-import { openDatabaseSync } from 'expo-sqlite';
-
-const db = openDatabaseSync('ridelog.db');
-
-type Goal = {
-  id: number;
-  title: string;
-  category: string;
-  description?: string;
-  priority: string;
-  created_at: string;
-  completed: number;
-};
+import { Check, Trash2, Target } from 'lucide-react-native';
+import { db, type Goal } from '../lib/db';
+import { getColors, priorityColor } from '../lib/theme';
 
 export default function BucketList() {
-  const theme = useTheme();
+  const c = getColors(useColorScheme());
   const [goals, setGoals] = useState<Goal[]>([]);
 
   const loadGoals = useCallback(() => {
-    const rows = db.getAllSync<Goal>(
-      'SELECT * FROM bucket_list ORDER BY completed ASC, priority DESC'
+    setGoals(
+      db.getAllSync<Goal>(
+        `SELECT * FROM bucket_list
+         ORDER BY completed ASC,
+           CASE priority WHEN 'Hoch' THEN 0 WHEN 'Mittel' THEN 1 ELSE 2 END ASC,
+           id DESC`
+      )
     );
-    setGoals(rows);
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadGoals();
-    }, [loadGoals])
-  );
+  useFocusEffect(useCallback(() => loadGoals(), [loadGoals]));
 
-  const toggleComplete = (id: number, currentStatus: number) => {
-    db.runSync('UPDATE bucket_list SET completed = ? WHERE id = ?', [
-      currentStatus === 1 ? 0 : 1,
-      id,
-    ]);
+  const toggleComplete = (id: number, current: number) => {
+    db.runSync('UPDATE bucket_list SET completed = ? WHERE id = ?', [current === 1 ? 0 : 1, id]);
     loadGoals();
   };
 
@@ -46,54 +33,79 @@ export default function BucketList() {
     loadGoals();
   };
 
+  const openCount = goals.filter((g) => g.completed === 0).length;
+
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <View style={[styles.container, { backgroundColor: c.background }]}>
       <FlatList
         data={goals}
         keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={{ padding: 15 }}
-        ListEmptyComponent={
-          <Text style={{ textAlign: 'center', color: '#8E8E93', marginTop: 30 }}>
-            Noch keine Ziele vorhanden. Füge im Setup-Tab neue Ziele hinzu.
-          </Text>
+        contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          goals.length > 0 ? (
+            <Text style={[styles.header, { color: c.textMuted }]}>
+              {openCount} offen • {goals.length - openCount} erledigt
+            </Text>
+          ) : null
         }
-        renderItem={({ item }) => (
-          <Card
-            style={[
-              styles.card,
-              { backgroundColor: theme.colors.surface, opacity: item.completed ? 0.6 : 1 },
-            ]}
-          >
-            <Card.Content style={styles.cardContent}>
-              <Checkbox
-                status={item.completed ? 'checked' : 'unchecked'}
+        ListEmptyComponent={
+          <View style={[styles.empty, { backgroundColor: c.surface, borderColor: c.border }]}>
+            <Target size={32} color={c.textMuted} />
+            <Text style={[styles.emptyTitle, { color: c.text }]}>Noch keine Ziele</Text>
+            <Text style={[styles.emptySub, { color: c.textMuted }]}>
+              Lege im Setup-Tab neue Meilensteine an (z.B. "Whip lernen").
+            </Text>
+          </View>
+        }
+        renderItem={({ item }) => {
+          const done = item.completed === 1;
+          const pColor = priorityColor(item.priority);
+          return (
+            <View
+              style={[
+                styles.card,
+                { backgroundColor: c.surface, borderColor: c.border, opacity: done ? 0.6 : 1 },
+              ]}
+            >
+              <Pressable
                 onPress={() => toggleComplete(item.id, item.completed)}
-                color={theme.colors.primary}
-              />
-              <View style={styles.textContainer}>
+                style={[
+                  styles.checkbox,
+                  { borderColor: done ? c.primary : c.border, backgroundColor: done ? c.primary : 'transparent' },
+                ]}
+                hitSlop={8}
+              >
+                {done ? <Check size={16} color="#FFFFFF" /> : null}
+              </Pressable>
+
+              <View style={{ flex: 1 }}>
                 <Text
-                  variant="titleMedium"
-                  style={[styles.title, item.completed && styles.strikeThrough]}
+                  style={[
+                    styles.title,
+                    { color: c.text },
+                    done && { textDecorationLine: 'line-through', color: c.textMuted },
+                  ]}
                 >
                   {item.title}
                 </Text>
-                <Text variant="bodySmall" style={{ color: '#8E8E93' }}>
-                  {item.category} • Prio: {item.priority}
-                </Text>
+                <View style={styles.metaRow}>
+                  <Text style={[styles.category, { color: c.textMuted }]}>{item.category}</Text>
+                  <View style={[styles.prioTag, { backgroundColor: pColor + '22' }]}>
+                    <Text style={[styles.prioText, { color: pColor }]}>{item.priority}</Text>
+                  </View>
+                </View>
                 {item.description ? (
-                  <Text variant="bodyMedium" style={{ marginTop: 4 }}>
-                    {item.description}
-                  </Text>
+                  <Text style={[styles.description, { color: c.textMuted }]}>{item.description}</Text>
                 ) : null}
               </View>
-              <IconButton
-                icon="trash-can-outline"
-                iconColor="#FF3B30"
-                onPress={() => deleteGoal(item.id)}
-              />
-            </Card.Content>
-          </Card>
-        )}
+
+              <Pressable onPress={() => deleteGoal(item.id)} hitSlop={8} style={styles.deleteBtn}>
+                <Trash2 size={18} color={c.danger} />
+              </Pressable>
+            </View>
+          );
+        }}
       />
     </View>
   );
@@ -101,13 +113,32 @@ export default function BucketList() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  card: { marginBottom: 10, borderRadius: 14 },
-  cardContent: {
+  header: { fontWeight: '600', fontSize: 13, marginBottom: 12 },
+  card: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
   },
-  textContainer: { flex: 1, marginLeft: 8 },
-  title: { fontWeight: 'bold' },
-  strikeThrough: { textDecorationLine: 'line-through', color: '#8E8E93' },
+  checkbox: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: { fontWeight: '700', fontSize: 16 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+  category: { fontSize: 13 },
+  prioTag: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+  prioText: { fontSize: 12, fontWeight: '700' },
+  description: { marginTop: 6, fontSize: 13 },
+  deleteBtn: { padding: 4 },
+  empty: { borderRadius: 18, borderWidth: 1, padding: 28, alignItems: 'center', gap: 8, marginTop: 20 },
+  emptyTitle: { fontWeight: '700', fontSize: 16 },
+  emptySub: { fontSize: 13, textAlign: 'center' },
 });
