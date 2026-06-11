@@ -22,6 +22,7 @@ interface EntryModalProps {
 
 export default function EntryModal({ visible, onClose, onSave }: EntryModalProps) {
   const c = getColors(useColorScheme());
+  const [title, setTitle] = useState('');
   const [location, setLocation] = useState('');
   const [category, setCategory] = useState<string>('Bikepark');
   const [notes, setNotes] = useState('');
@@ -36,6 +37,7 @@ export default function EntryModal({ visible, onClose, onSave }: EntryModalProps
   }, [visible]);
 
   const reset = () => {
+    setTitle('');
     setLocation('');
     setCategory('Bikepark');
     setNotes('');
@@ -49,6 +51,10 @@ export default function EntryModal({ visible, onClose, onSave }: EntryModalProps
   };
 
   const handleSave = () => {
+    if (!title.trim()) {
+      Alert.alert('Fehler', 'Bitte gib einen Titel ein.');
+      return;
+    }
     if (!location.trim()) {
       Alert.alert('Fehler', 'Bitte gib einen Ort oder Bikepark ein.');
       return;
@@ -61,7 +67,7 @@ export default function EntryModal({ visible, onClose, onSave }: EntryModalProps
         [
           new Date().toISOString().split('T')[0],
           category,
-          location.trim(),
+          title.trim(),
           notes.trim() || null,
           parsedCost && !Number.isNaN(parsedCost) ? parsedCost : null,
           location.trim(),
@@ -159,6 +165,20 @@ export default function EntryModal({ visible, onClose, onSave }: EntryModalProps
           </View>
 
           <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+            <View>
+              <Text style={styles.label}>TITEL / AKTIVITÄT</Text>
+              <TextInput
+                value={title}
+                onChangeText={setTitle}
+                mode="outlined"
+                placeholder="z.B. Enduro-Tour, Sprung-Session"
+                outlineColor={c.border}
+                activeOutlineColor={c.primary}
+                textColor={c.text}
+                style={styles.input}
+              />
+            </View>
+
             <View>
               <Text style={styles.label}>ORT / BIKEPARK</Text>
               <TextInput

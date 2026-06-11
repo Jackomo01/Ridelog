@@ -18,6 +18,7 @@ export default function SettingsScreen() {
   const [userGroup, setUserGroup] = useState('Erwachsener');
 
   const [bTitle, setBTitle] = useState('');
+  const [bDesc, setBDesc] = useState('');
   const [bCat, setBCat] = useState<string>('Bikepark');
   const [bPrio, setBPrio] = useState<string>('Mittel');
 
@@ -45,11 +46,12 @@ export default function SettingsScreen() {
       return;
     }
     db.runSync(
-      'INSERT INTO bucket_list (title, category, priority, created_at, completed) VALUES (?, ?, ?, ?, 0)',
-      [bTitle.trim(), bCat, bPrio, new Date().toISOString().split('T')[0]]
+      'INSERT INTO bucket_list (title, category, priority, created_at, completed, description) VALUES (?, ?, ?, ?, 0, ?)',
+      [bTitle.trim(), bCat, bPrio, new Date().toISOString().split('T')[0], bDesc.trim() || null]
     );
     Alert.alert('Erfolg', 'Ziel zur Bucket-List hinzugefügt!');
     setBTitle('');
+    setBDesc('');
   };
 
   const exportBackup = async () => {
@@ -230,6 +232,19 @@ export default function SettingsScreen() {
           value={bTitle}
           onChangeText={setBTitle}
           mode="outlined"
+          outlineColor={c.border}
+          activeOutlineColor={c.primary}
+          textColor={c.text}
+          style={styles.input}
+        />
+
+        <TextInput
+          label="Beschreibung (optional)"
+          value={bDesc}
+          onChangeText={setBDesc}
+          mode="outlined"
+          multiline
+          numberOfLines={2}
           outlineColor={c.border}
           activeOutlineColor={c.primary}
           textColor={c.text}

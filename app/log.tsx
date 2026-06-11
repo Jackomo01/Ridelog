@@ -1,9 +1,9 @@
 import React, { useState, useCallback } from 'react';
-import { View, StyleSheet, FlatList, ScrollView, Pressable, useColorScheme } from 'react-native';
+import { View, StyleSheet, FlatList, ScrollView, Pressable, useColorScheme, Alert } from 'react-native';
 import { Text, SegmentedButtons } from 'react-native-paper';
 import { useFocusEffect } from 'expo-router';
 import { Calendar as RNCalendar } from 'react-native-calendars';
-import { MapPin } from 'lucide-react-native';
+import { MapPin, Trash2 } from 'lucide-react-native';
 import { db, type Activity } from '../lib/db';
 import { CATEGORIES, categoryMeta, getColors } from '../lib/theme';
 
@@ -33,6 +33,24 @@ export default function Logbuch() {
   }, [selectedCategory]);
 
   useFocusEffect(useCallback(() => loadActivities(), [loadActivities]));
+
+  const deleteActivity = (id: number) => {
+    Alert.alert(
+      'Eintrag loeschen',
+      'Moechtest du diesen Eintrag wirklich loeschen? Diese Aktion kann nicht rueckgaengig gemacht werden.',
+      [
+        { text: 'Abbrechen', onPress: () => {}, style: 'cancel' },
+        {
+          text: 'Loeschen',
+          onPress: () => {
+            db.runSync('DELETE FROM activities WHERE id = ?', [id]);
+            loadActivities();
+          },
+          style: 'destructive',
+        },
+      ]
+    );
+  };
 
   const chips = ['Alle', ...CATEGORIES];
 
@@ -123,6 +141,13 @@ export default function Logbuch() {
                     <Text style={[styles.costText, { color: c.primary }]}>Kosten: {item.cost}€</Text>
                   ) : null}
                 </View>
+                <Pressable
+                  onPress={() => deleteActivity(item.id)}
+                  hitSlop={8}
+                  style={styles.deleteBtn}
+                >
+                  <Trash2 size={18} color={c.danger} />
+                </Pressable>
               </View>
             );
           }}
@@ -182,4 +207,5 @@ const styles = StyleSheet.create({
   locText: { fontSize: 12 },
   noteText: { marginTop: 8, fontStyle: 'italic', fontSize: 13 },
   costText: { marginTop: 8, fontWeight: '700', fontSize: 13 },
+  deleteBtn: { padding: 4 },
 });
