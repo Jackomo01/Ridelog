@@ -1,105 +1,79 @@
 import React, { useState, useCallback } from 'react';
-import { View, StyleSheet, FlatList, ScrollView } from 'react-native';
-import { Text, Card, SegmentedButtons, useTheme, Chip } from 'react-native-paper';
+import { View, StyleSheet, FlatList, ScrollView, Pressable, useColorScheme } from 'react-native';
+import { Text, SegmentedButtons } from 'react-native-paper';
 import { useFocusEffect } from 'expo-router';
-import { openDatabaseSync } from 'expo-sqlite';
 import { Calendar as RNCalendar } from 'react-native-calendars';
+import { MapPin } from 'lucide-react-native';
+import { db, type Activity } from '../lib/db';
+import { CATEGORIES, categoryMeta, getColors } from '../lib/theme';
 
-const db = openDatabaseSync('ridelog.db');
-
-const CATEGORIES = [
-  'Bikepark',
-  'Skifahren',
-  'Mountainbike',
-  'Rennrad',
-  'Laufen',
-  'Wandern',
-  'Fitnessstudio',
-  'Sonstiges',
-];
-
-type Activity = {
-  id: number;
-  date: string;
-  category: string;
-  title: string;
-  note?: string;
-  cost?: number;
-  location?: string;
-};
-
-type MarkedDates = {
-  [date: string]: { marked: boolean; dotColor: string };
-};
+type MarkedDates = { [date: string]: { marked: boolean; dotColor: string } };
 
 export default function Logbuch() {
-  const theme = useTheme();
+  const c = getColors(useColorScheme());
   const [viewMode, setViewMode] = useState('list');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [markedDates, setMarkedDates] = useState<MarkedDates>({});
 
   const loadActivities = useCallback(() => {
-    let rows: Activity[];
-    if (selectedCategory) {
-      rows = db.getAllSync<Activity>(
-        'SELECT * FROM activities WHERE category = ? ORDER BY date DESC',
-        [selectedCategory]
-      );
-    } else {
-      rows = db.getAllSync<Activity>('SELECT * FROM activities ORDER BY date DESC');
-    }
+    const rows = selectedCategory
+      ? db.getAllSync<Activity>(
+          'SELECT * FROM activities WHERE category = ? ORDER BY date DESC, id DESC',
+          [selectedCategory]
+        )
+      : db.getAllSync<Activity>('SELECT * FROM activities ORDER BY date DESC, id DESC');
     setActivities(rows);
 
     const marked: MarkedDates = {};
-    rows.forEach((act) => {
-      marked[act.date] = { marked: true, dotColor: theme.colors.primary };
+    rows.forEach((a) => {
+      marked[a.date] = { marked: true, dotColor: categoryMeta(a.category).color };
     });
     setMarkedDates(marked);
-  }, [selectedCategory, theme.colors.primary]);
+  }, [selectedCategory]);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadActivities();
-    }, [loadActivities])
-  );
+  useFocusEffect(useCallback(() => loadActivities(), [loadActivities]));
+
+  const chips = ['Alle', ...CATEGORIES];
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <View style={[styles.container, { backgroundColor: c.background }]}>
       <View style={styles.headerControl}>
         <SegmentedButtons
           value={viewMode}
           onValueChange={setViewMode}
+          density="small"
           buttons={[
-            { value: 'list', label: 'Liste' },
-            { value: 'cal', label: 'Kalender' },
+            { value: 'list', label: 'Liste', icon: 'format-list-bulleted' },
+            { value: 'cal', label: 'Kalender', icon: 'calendar' },
           ]}
         />
       </View>
 
-      <View style={{ height: 50, paddingLeft: 15 }}>
+      <View style={{ maxHeight: 48 }}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.chipContainer}
         >
-          <Chip
-            selected={selectedCategory === null}
-            onPress={() => setSelectedCategory(null)}
-            style={styles.chip}
-          >
-            Alle
-          </Chip>
-          {CATEGORIES.map((cat) => (
-            <Chip
-              key={cat}
-              selected={selectedCategory === cat}
-              onPress={() => setSelectedCategory(selectedCategory === cat ? null : cat)}
-              style={styles.chip}
-            >
-              {cat}
-            </Chip>
-          ))}
+          {chips.map((label) => {
+            const value = label === 'Alle' ? null : label;
+            const selected = selectedCategory === value;
+            const color = label === 'Alle' ? c.primary : categoryMeta(label).color;
+            return (
+              <Pressable
+                key={label}
+                onPress={() => setSelectedCategory(selected ? null : value)}
+                style={[
+                  styles.chip,
+                  { backgroundColor: c.surface, borderColor: c.border },
+                  selected && { backgroundColor: color + '22', borderColor: color },
+                ]}
+              >
+                <Text style={[styles.chipText, { color: selected ? color : c.textMuted }]}>{label}</Text>
+              </Pressable>
+            );
+          })}
         </ScrollView>
       </View>
 
@@ -107,58 +81,70 @@ export default function Logbuch() {
         <FlatList
           data={activities}
           keyExtractor={(item) => item.id.toString()}
-          contentContainerStyle={{ padding: 15 }}
+          contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
+          showsVerticalScrollIndicator={false}
           ListEmptyComponent={
-            <Text style={{ textAlign: 'center', color: '#8E8E93', marginTop: 30 }}>
+            <Text style={[styles.emptyText, { color: c.textMuted }]}>
               Noch keine Einträge vorhanden.
             </Text>
           }
-          renderItem={({ item }) => (
-            <Card
-              style={[styles.card, { backgroundColor: theme.colors.surface }]}
-              mode="elevated"
-            >
-              <Card.Content>
-                <View style={styles.cardHeader}>
-                  <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>
-                    {item.title}
-                  </Text>
-                  <Text variant="bodySmall" style={styles.dateBadge}>
-                    {item.date}
-                  </Text>
+          renderItem={({ item }) => {
+            const meta = categoryMeta(item.category);
+            const Icon = meta.icon;
+            return (
+              <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
+                <View style={[styles.cardIcon, { backgroundColor: meta.color + '22' }]}>
+                  <Icon size={22} color={meta.color} />
                 </View>
-                <Text variant="bodyMedium" style={styles.catText}>
-                  {item.category}
-                  {item.location ? ` 📍 ${item.location}` : ''}
-                </Text>
-                {item.note ? (
-                  <Text variant="bodySmall" style={styles.noteText}>
-                    {item.note}
-                  </Text>
-                ) : null}
-                {item.cost ? (
-                  <Text variant="labelMedium" style={styles.costText}>
-                    Kosten: {item.cost}€
-                  </Text>
-                ) : null}
-              </Card.Content>
-            </Card>
-          )}
+                <View style={{ flex: 1 }}>
+                  <View style={styles.cardHeader}>
+                    <Text style={[styles.cardTitle, { color: c.text }]} numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                    <Text style={[styles.dateBadge, { color: c.textMuted }]}>{item.date}</Text>
+                  </View>
+                  <View style={styles.catRow}>
+                    <View style={[styles.catTag, { backgroundColor: meta.color + '22' }]}>
+                      <Text style={[styles.catTagText, { color: meta.color }]}>{item.category}</Text>
+                    </View>
+                    {item.location ? (
+                      <View style={styles.locRow}>
+                        <MapPin size={12} color={c.textMuted} />
+                        <Text style={[styles.locText, { color: c.textMuted }]} numberOfLines={1}>
+                          {item.location}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  {item.note ? (
+                    <Text style={[styles.noteText, { color: c.textMuted }]}>{item.note}</Text>
+                  ) : null}
+                  {item.cost ? (
+                    <Text style={[styles.costText, { color: c.primary }]}>Kosten: {item.cost}€</Text>
+                  ) : null}
+                </View>
+              </View>
+            );
+          }}
         />
       ) : (
-        <ScrollView style={{ padding: 15 }}>
-          <RNCalendar
-            theme={{
-              calendarBackground: theme.colors.surface,
-              textSectionTitleColor: '#b6c1cd',
-              selectedDayBackgroundColor: theme.colors.primary,
-              selectedDayTextColor: '#ffffff',
-              todayTextColor: theme.colors.primary,
-              dayTextColor: theme.colors.onSurface,
-              monthTextColor: theme.colors.onSurface,
-            }}
-            markedDates={markedDates}
-          />
+        <ScrollView style={{ padding: 16 }}>
+          <View style={{ borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: c.border }}>
+            <RNCalendar
+              theme={{
+                calendarBackground: c.surface,
+                textSectionTitleColor: c.textMuted,
+                selectedDayBackgroundColor: c.primary,
+                selectedDayTextColor: '#ffffff',
+                todayTextColor: c.primary,
+                dayTextColor: c.text,
+                monthTextColor: c.text,
+                textDisabledColor: c.border,
+                arrowColor: c.primary,
+              }}
+              markedDates={markedDates}
+            />
+          </View>
         </ScrollView>
       )}
     </View>
@@ -167,17 +153,33 @@ export default function Logbuch() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  headerControl: { padding: 15 },
-  chipContainer: { alignItems: 'center', paddingRight: 20 },
-  chip: { marginRight: 8, height: 34 },
-  card: { marginBottom: 12, borderRadius: 16 },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  headerControl: { padding: 16, paddingBottom: 8 },
+  chipContainer: { alignItems: 'center', paddingHorizontal: 16, gap: 8 },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1.5,
   },
-  dateBadge: { color: '#8E8E93' },
-  catText: { color: '#8E8E93', marginTop: 4 },
-  noteText: { marginTop: 8, fontStyle: 'italic', opacity: 0.8 },
-  costText: { marginTop: 8, fontWeight: '600' },
+  chipText: { fontWeight: '600', fontSize: 13 },
+  emptyText: { textAlign: 'center', marginTop: 40 },
+  card: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 14,
+  },
+  cardIcon: { width: 46, height: 46, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
+  cardTitle: { fontWeight: '800', fontSize: 16, flex: 1 },
+  dateBadge: { fontSize: 12 },
+  catRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' },
+  catTag: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  catTagText: { fontSize: 12, fontWeight: '700' },
+  locRow: { flexDirection: 'row', alignItems: 'center', gap: 3, flexShrink: 1 },
+  locText: { fontSize: 12 },
+  noteText: { marginTop: 8, fontStyle: 'italic', fontSize: 13 },
+  costText: { marginTop: 8, fontWeight: '700', fontSize: 13 },
 });
