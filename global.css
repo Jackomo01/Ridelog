@@ -1,0 +1,118 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Premium UI Utilities */
+@layer components {
+  /* Glass Effect - Glassmorphism */
+  .glass {
+    @apply bg-white/10 dark:bg-black/20 backdrop-blur-md border border-white/20 dark:border-white/10;
+  }
+
+  .glass-lg {
+    @apply bg-white/5 dark:bg-black/30 backdrop-blur-xl border border-white/10 dark:border-white/5;
+  }
+
+  /* Smooth Elevation System */
+  .elevation-1 {
+    @apply shadow-sm;
+  }
+
+  .elevation-2 {
+    @apply shadow-md;
+  }
+
+  .elevation-3 {
+    @apply shadow-lg;
+  }
+
+  .elevation-4 {
+    @apply shadow-xl;
+  }
+
+  /* Premium Button Styles */
+  .btn-primary {
+    @apply px-6 py-3 rounded-lg font-semibold text-white bg-primary hover:opacity-90 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply px-6 py-3 rounded-lg font-semibold text-foreground bg-surface2 hover:bg-border active:scale-95 transition-all duration-200 disabled:opacity-50;
+  }
+
+  .btn-ghost {
+    @apply px-6 py-3 rounded-lg font-semibold text-primary hover:bg-surface2 active:scale-95 transition-all duration-200;
+  }
+
+  /* Card Styles */
+  .card {
+    @apply rounded-xl bg-surface border border-border p-4 shadow-sm;
+  }
+
+  .card-elevated {
+    @apply rounded-xl bg-surface border border-border/50 p-4 shadow-md;
+  }
+
+  .card-glass {
+    @apply glass rounded-xl p-4;
+  }
+
+  /* Typography Hierarchy */
+  .text-display {
+    @apply text-4xl font-bold tracking-tight;
+  }
+
+  .text-headline {
+    @apply text-2xl font-bold tracking-tight;
+  }
+
+  .text-title {
+    @apply text-xl font-semibold;
+  }
+
+  .text-body {
+    @apply text-base font-normal leading-relaxed;
+  }
+
+  .text-label {
+    @apply text-sm font-medium uppercase tracking-wide;
+  }
+
+  /* Focus States for Accessibility */
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-slate-900;
+  }
+
+  /* Touch Target Sizing */
+  .touch-target {
+    @apply min-h-12 min-w-12;
+  }
+
+  /* Smooth Transitions */
+  .transition-smooth {
+    @apply transition-all duration-300 ease-out;
+  }
+
+  /* Reduced Motion Support */
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      @apply !transition-none !animate-none;
+    }
+  }
+}
+
+/* Smooth Scroll Behavior */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Prevent layout shift on scrollbar */
+html {
+  scrollbar-gutter: stable;
+}
+
+/* Improve font rendering */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}

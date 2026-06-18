@@ -1,141 +1,119 @@
-import { Tabs } from 'expo-router';
-import { useColorScheme } from 'react-native';
-import { MD3DarkTheme, MD3LightTheme, Provider as PaperProvider } from 'react-native-paper';
-import { useEffect } from 'react';
-import { openDatabaseSync } from 'expo-sqlite';
-import { LayoutDashboard, CalendarDays, CheckSquare, Wallet, BarChart3, Settings } from 'lucide-react-native';
+import "@/global.css";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Stack } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import "react-native-reanimated";
+import { Platform } from "react-native";
+import "@/lib/_core/nativewind-pressable";
+import { ThemeProvider } from "@/lib/theme-provider";
+import {
+  SafeAreaFrameContext,
+  SafeAreaInsetsContext,
+  SafeAreaProvider,
+  initialWindowMetrics,
+} from "react-native-safe-area-context";
+import type { EdgeInsets, Metrics, Rect } from "react-native-safe-area-context";
 
-export const db = openDatabaseSync('ridelog.db');
+import { trpc, createTRPCClient } from "@/lib/trpc";
+import { initManusRuntime, subscribeSafeAreaInsets } from "@/lib/_core/manus-runtime";
+
+const DEFAULT_WEB_INSETS: EdgeInsets = { top: 0, right: 0, bottom: 0, left: 0 };
+const DEFAULT_WEB_FRAME: Rect = { x: 0, y: 0, width: 0, height: 0 };
+
+export const unstable_settings = {
+  anchor: "(tabs)",
+};
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  const initialInsets = initialWindowMetrics?.insets ?? DEFAULT_WEB_INSETS;
+  const initialFrame = initialWindowMetrics?.frame ?? DEFAULT_WEB_FRAME;
 
-  const theme =
-    colorScheme === 'dark'
-      ? {
-          ...MD3DarkTheme,
-          colors: {
-            ...MD3DarkTheme.colors,
-            primary: '#34C759',
-            background: '#121212',
-            surface: '#1E1E1E',
-          },
-        }
-      : {
-          ...MD3LightTheme,
-          colors: {
-            ...MD3LightTheme.colors,
-            primary: '#007AFF',
-            background: '#F2F2F7',
-            surface: '#FFFFFF',
-          },
-        };
+  const [insets, setInsets] = useState<EdgeInsets>(initialInsets);
+  const [frame, setFrame] = useState<Rect>(initialFrame);
 
+  // Initialize Manus runtime for cookie injection from parent container
   useEffect(() => {
-    db.execSync(`
-      CREATE TABLE IF NOT EXISTS activities (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        date TEXT NOT NULL,
-        category TEXT NOT NULL,
-        title TEXT NOT NULL,
-        note TEXT,
-        cost REAL,
-        location TEXT,
-        pass_id INTEGER
-      );
-      CREATE TABLE IF NOT EXISTS bucket_list (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT NOT NULL,
-        category TEXT NOT NULL,
-        description TEXT,
-        priority TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        completed INTEGER DEFAULT 0
-      );
-      CREATE TABLE IF NOT EXISTS passes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        price REAL NOT NULL,
-        day_price_youth REAL NOT NULL,
-        day_price_adult REAL NOT NULL,
-        user_group TEXT NOT NULL
-      );
-    `);
+    initManusRuntime();
   }, []);
 
+  const handleSafeAreaUpdate = useCallback((metrics: Metrics) => {
+    setInsets(metrics.insets);
+    setFrame(metrics.frame);
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const unsubscribe = subscribeSafeAreaInsets(handleSafeAreaUpdate);
+    return () => unsubscribe();
+  }, [handleSafeAreaUpdate]);
+
+  // Create clients once and reuse them
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            // Disable automatic refetching on window focus for mobile
+            refetchOnWindowFocus: false,
+            // Retry failed requests once
+            retry: 1,
+          },
+        },
+      }),
+  );
+  const [trpcClient] = useState(() => createTRPCClient());
+
+  // Ensure minimum 8px padding for top and bottom on mobile
+  const providerInitialMetrics = useMemo(() => {
+    const metrics = initialWindowMetrics ?? { insets: initialInsets, frame: initialFrame };
+    return {
+      ...metrics,
+      insets: {
+        ...metrics.insets,
+        top: Math.max(metrics.insets.top, 16),
+        bottom: Math.max(metrics.insets.bottom, 12),
+      },
+    };
+  }, [initialInsets, initialFrame]);
+
+  const content = (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <trpc.Provider client={trpcClient} queryClient={queryClient}>
+        <QueryClientProvider client={queryClient}>
+          {/* Default to hiding native headers so raw route segments don't appear (e.g. "(tabs)", "products/[id]"). */}
+          {/* If a screen needs the native header, explicitly enable it and set a human title via Stack.Screen options. */}
+          {/* in order for ios apps tab switching to work properly, use presentation: "fullScreenModal" for login page, whenever you decide to use presentation: "modal*/}
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="oauth/callback" />
+          </Stack>
+          <StatusBar style="auto" />
+        </QueryClientProvider>
+      </trpc.Provider>
+    </GestureHandlerRootView>
+  );
+
+  const shouldOverrideSafeArea = Platform.OS === "web";
+
+  if (shouldOverrideSafeArea) {
+    return (
+      <ThemeProvider>
+        <SafeAreaProvider initialMetrics={providerInitialMetrics}>
+          <SafeAreaFrameContext.Provider value={frame}>
+            <SafeAreaInsetsContext.Provider value={insets}>
+              {content}
+            </SafeAreaInsetsContext.Provider>
+          </SafeAreaFrameContext.Provider>
+        </SafeAreaProvider>
+      </ThemeProvider>
+    );
+  }
+
   return (
-    <PaperProvider theme={theme}>
-      <Tabs
-        screenOptions={{
-          tabBarActiveTintColor: theme.colors.primary,
-          tabBarInactiveTintColor: '#8E8E93',
-          tabBarStyle: {
-            backgroundColor: theme.colors.surface,
-            borderTopWidth: 0,
-            elevation: 10,
-            height: 65,
-            paddingBottom: 10,
-          },
-          headerStyle: {
-            backgroundColor: theme.colors.surface,
-          },
-          headerTintColor: theme.colors.onSurface,
-          headerTitleStyle: {
-            fontWeight: 'bold',
-          },
-        }}
-      >
-        <Tabs.Screen
-          name="index"
-          options={{
-            title: 'Dashboard',
-            tabBarIcon: ({ color }) => <LayoutDashboard color={color} size={24} />,
-          }}
-        />
-        <Tabs.Screen
-          name="log"
-          options={{
-            title: 'Logbuch',
-            tabBarIcon: ({ color }) => <CalendarDays color={color} size={24} />,
-          }}
-        />
-        <Tabs.Screen
-          name="bucket"
-          options={{
-            title: 'Ziele',
-            tabBarIcon: ({ color }) => <CheckSquare color={color} size={24} />,
-          }}
-        />
-        <Tabs.Screen
-          name="passes"
-          options={{
-            title: 'Pass-Rechner',
-            tabBarIcon: ({ color }) => <Wallet color={color} size={24} />,
-          }}
-        />
-        <Tabs.Screen
-          name="stats"
-          options={{
-            title: 'Stats',
-            tabBarIcon: ({ color }) => <BarChart3 color={color} size={24} />,
-          }}
-        />
-        <Tabs.Screen
-          name="settings"
-          options={{
-            title: 'Setup',
-            tabBarIcon: ({ color }) => <Settings color={color} size={24} />,
-          }}
-        />
-        <Tabs.Screen
-          name="entryModal"
-          options={{
-            href: null,
-            presentation: 'modal',
-            title: 'Neuer Eintrag',
-          }}
-        />
-      </Tabs>
-    </PaperProvider>
+    <ThemeProvider>
+      <SafeAreaProvider initialMetrics={providerInitialMetrics}>{content}</SafeAreaProvider>
+    </ThemeProvider>
   );
 }
